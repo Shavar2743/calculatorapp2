@@ -30,11 +30,11 @@ jobs:
             - name: SSH Connection & Cleanup
               run: |
                     ssh -i ${{env.PATH_KEY}}/Key1 ${{secrets.EC2_USER}}@${{secrets.EC2_IP}} << 'ENDSSH'
-                        sudo yum update -y
-                        sudo yum upgrade -y
-                        sudo yum install -y git nodejs
-                        sudo npm install -g serve
-                        sudo rm -rf ~/build
+                      sudo yum update -y
+                      sudo yum upgrade -y
+                      sudo yum install -y git nodejs
+                      sudo npm install -g serve
+                      sudo rm -rf ~/build
                     ENDSSH
 
             - name: SCP
@@ -44,6 +44,6 @@ jobs:
             - name: Start App
               run: |
                     ssh -i ${{env.PATH_KEY}}/Key1 ${{secrets.EC2_USER}}@${{secrets.EC2_IP}} << 'ENDSSH'
-                      sudo serve -l 80 -s ~/build > /dev/null 2>&1 &
+                      nohup sudo serve -l 80 -s ~/build > /dev/null 2>&1 &
                     ENDSSH
                   
