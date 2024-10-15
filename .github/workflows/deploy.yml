@@ -44,5 +44,6 @@ jobs:
             - name: Start App
               run: |
                     ssh -i ${{env.PATH_KEY}}/Key1 ${{secrets.EC2_USER}}@${{secrets.EC2_IP}} << 'ENDSSH'
-                        sudo serve -l 80 -s ~/build
+                      sudo serve -l 80 -s ~/build > /dev/null 2>&1 &
                     ENDSSH
+                  
