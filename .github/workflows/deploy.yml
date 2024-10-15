@@ -4,6 +4,9 @@ name: Deploy on EC2
 
 on: push
 
+env:
+    PATH_KEY: ~/.ssh
+
 jobs:
     deploy:
         runs-on: ubuntu-latest
@@ -17,16 +20,16 @@ jobs:
                     npm install
                     npm run build
 
-            - name: Set up SSH
+            - name: Setup SSH
               run: |
-                mkdir -p ~/.ssh
-                echo "${{ secrets.SSH_PRIVATE_KEY}}" > ~/.ssh/Key1
-                chmod 600 ~/.ssh/Key1
-                ssh-keyscan -H ${{secrets.EC2_IP}} >> ~/.ssh/known_hosts
+                    mkdir -p ${{env.PATH_KEY}}
+                    echo "${{secrets.SSH_KEY}}" > ${{env.PATH_KEY}}/Key1
+                    chmod 600 ${{env.PATH_KEY}}/Key1
+                    ssh-keyscan -H ${{secrets.EC2_IP}} >> ${{env.PATH_KEY}}/known_hosts
 
             - name: SSH Connection & Cleanup
               run: |
-                    ssh -i ~/.ssh/Key1 ${{secrets.EC2_USER}}@${{secrets.EC2_IP}} << 'ENDSSH'
+                    ssh -i ${{env.PATH_KEY}}/Key1 ${{secrets.EC2_USER}}@${{secrets.EC2_IP}} << 'ENDSSH'
                         sudo yum update -y
                         sudo yum upgrade -y
                         sudo yum install -y git nodejs
@@ -36,10 +39,10 @@ jobs:
 
             - name: SCP
               run: |
-                    scp -i ~/.ssh/Key1 -r build ${{secrets.EC2_USER}}@${{secrets.EC2_IP}}:/home/${{secrets.EC2_USER}}/build
+                    scp -i ${{env.PATH_KEY}}/Key1 -r build ${{secrets.EC2_USER}}@${{secrets.EC2_IP}}:/home/${{secrets.EC2_USER}}/build
 
             - name: Start App
               run: |
-                    ssh -i ~/.ssh/Key1 ${{secrets.EC2_USER}}@${{secrets.EC2_IP}} << 'ENDSSH'
+                    ssh -i ${{env.PATH_KEY}}/Key1 ${{secrets.EC2_USER}}@${{secrets.EC2_IP}} << 'ENDSSH'
                         sudo server -l 80 -s ~/build
                     ENDSSH
