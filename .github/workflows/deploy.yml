@@ -5,7 +5,7 @@ name: Deploy on EC2
 on: push
 
 env:
-    PATH_KEY: ~/.ssh
+    PATH_KEY: "~/.ssh"
 
 jobs:
     deploy:
