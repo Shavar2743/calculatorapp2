@@ -10,12 +10,63 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v2
 
+      - name: Set up AWS CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install awscli -y
+          aws --version
+
+      - name: Delete Old Security Groups
+        run: |
+          OLD_SG_IDS=$(aws ec2 describe-security-groups --filters Name=vpc-id,Values=vpc-04e0171d20dfee44f --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text)
+          if [ ! -z "$OLD_SG_IDS" ]; then
+            for SG_ID in $OLD_SG_IDS; do
+              aws ec2 delete-security-group --group-id $SG_ID
+            done
+          fi
+
+      - name: Create Security Group
+        id: aws_resources
+        run: |
+          SG_ID=$(aws ec2 create-security-group --group-name calculatorapp-sg --description "Security group for CalculatorApp" --vpc-id vpc-04e0171d20dfee44f --query 'GroupId' --output text)
+          echo "SG_ID: $SG_ID"
+          aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 22 --cidr 0.0.0.0/0
+          aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 80 --cidr 0.0.0.0/0
+          aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 3000 --cidr 0.0.0.0/0
+          echo "::set-output name=SG_ID::$SG_ID"
+
+      - name: Launch EC2 instance via AWS CLI
+        id: launch_ec2
+        run: |
+          INSTANCE_ID=$(aws ec2 run-instances \
+            --image-id ami-08ec94f928cf25a9d \
+            --instance-type t2.micro \
+            --key-name ELB-Key \  # Key Pair Name ohne .pem
+            --security-group-ids ${{ steps.aws_resources.outputs.SG_ID }} \
+            --subnet-id subnet-07a7aa6916f788b41 \
+            --associate-public-ip-address \
+            --query 'Instances[0].InstanceId' \
+            --output text)
+          aws ec2 wait instance-running --instance-ids $INSTANCE_ID
+          PUBLIC_IP=$(aws ec2 describe-instances \
+            --instance-ids $INSTANCE_ID \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)
+          echo "EC2 Instance ID: $INSTANCE_ID"
+          echo "Public IP: $PUBLIC_IP"
+          echo "::set-output name=EC2_IP::$PUBLIC_IP"
+
+      - name: Store EC2 IP Address
+        run: |
+          echo "EC2 IP Address: ${{ steps.launch_ec2.outputs.EC2_IP }}"
+
       - name: Build Docker Image
         run: |
           docker build -t "${{ secrets.DOCKERHUB_USERNAME }}"/calculatorapp:latest .
 
       - name: Docker Login
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
       - name: Docker Push
         run: |
@@ -26,35 +77,30 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY}}" > ~/.ssh/meinPrivateKey
           chmod 600 ~/.ssh/meinPrivateKey
-          ssh-keyscan -H ${{secrets.EC2_IP}} >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ steps.launch_ec2.outputs.EC2_IP }} >> ~/.ssh/known_hosts
 
       - name: SSH Connection to EC2
         run: |
-          ssh -i ~/.ssh/meinPrivateKey ec2-user@${{ secrets.EC2_IP }} << 'ENDSSH'
+          ssh -i ~/.ssh/meinPrivateKey ec2-user@${{ steps.launch_ec2.outputs.EC2_IP }} << 'ENDSSH'
               sudo yum update -y
               sudo yum upgrade -y
-
               sudo yum install docker -y
               sudo systemctl enable docker.service
               sudo systemctl start docker
               sudo usermod -aG docker ec2-user
-
               if [ $(docker ps -q --filter "name=calculatorapp") ]; then
                   sudo docker stop calculatorapp
                   sudo docker rm calculatorapp
               fi
-
               sudo docker pull "${{ secrets.DOCKERHUB_USERNAME }}"/calculatorapp:latest
           ENDSSH
 
       - name: Start Docker Container on EC2
         run: |
-          ssh -i ~/.ssh/meinPrivateKey ec2-user@${{ secrets.EC2_IP }} << 'ENDSSH'
+          ssh -i ~/.ssh/meinPrivateKey ec2-user@${{ steps.launch_ec2.outputs.EC2_IP }} << 'ENDSSH'
               sudo docker run -d -p 80:3000 --name calculatorapp "${{ secrets.DOCKERHUB_USERNAME }}"/calculatorapp:latest
           ENDSSH
 
       - name: Clean Up SSH Key File (optional)
         run: |
           rm ~/.ssh/meinPrivateKey
-
-          ##
