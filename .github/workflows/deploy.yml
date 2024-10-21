@@ -20,7 +20,7 @@ jobs:
         id: aws_resources
         run: |
           SG_ID=$(aws ec2 describe-security-groups \
-            --filters Name=group-name,Values=calculatorapp-sg Name=vpc-id,Values=vpc-04e0171d20dfee44f \
+            --filters "Name=group-name,Values=calculatorapp-sg" "Name=vpc-id,Values=vpc-04e0171d20dfee44f" \
             --query 'SecurityGroups[0].GroupId' --output text)
           
           if [ "$SG_ID" == "None" ]; then
