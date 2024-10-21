@@ -19,13 +19,20 @@ jobs:
       - name: Create Security Group
         id: aws_resources
         run: |
-          SG_ID=$(aws ec2 create-security-group --group-name calculatorapp-sg \
-            --description "Security group for CalculatorApp" --vpc-id vpc-04e0171d20dfee44f --query 'GroupId' --output text)
+          echo "Erstelle Sicherheitsgruppe..."
+          SG_ID=$(aws ec2 create-security-group \
+            --group-name calculatorapp-sg \
+            --description "Security group for CalculatorApp" \
+            --vpc-id vpc-04e0171d20dfee44f \
+            --query 'GroupId' --output text) || exit 1
           
-          aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 22 --cidr 0.0.0.0/0
-          aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 80 --cidr 0.0.0.0/0
-          aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 3000 --cidr 0.0.0.0/0
+          echo "Sicherheitsgruppe erstellt mit ID: $SG_ID"
           
+          echo "Öffne Ports in der Sicherheitsgruppe..."
+          aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 22 --cidr 0.0.0.0/0 || exit 1
+          aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 80 --cidr 0.0.0.0/0 || exit 1
+          aws ec2 authorize-security-group-ingress --group-id $SG_ID --protocol tcp --port 3000 --cidr 0.0.0.0/0 || exit 1
+
           echo "::set-output name=SG_ID::$SG_ID"
 
       - name: Launch EC2 instance via AWS CLI
